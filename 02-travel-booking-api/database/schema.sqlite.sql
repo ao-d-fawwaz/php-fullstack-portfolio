@@ -1,0 +1,8 @@
+-- Same schema for SQLite (used by the automated tests)
+CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, email TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'staff' CHECK (role IN ('staff','admin')), created_at TEXT NOT NULL);
+CREATE TABLE products (code TEXT PRIMARY KEY, title TEXT NOT NULL, price INTEGER NOT NULL, duration_days INTEGER NOT NULL, vendor TEXT NOT NULL, airline TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')));
+CREATE TABLE bookings (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT NOT NULL, phone TEXT NOT NULL, email TEXT NOT NULL, departure_date TEXT NOT NULL, pax INTEGER NOT NULL, passport_number TEXT NOT NULL, passport_expiry TEXT NOT NULL, product_code TEXT NOT NULL REFERENCES products(code), status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','paid','cancelled')), created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL, updated_at TEXT);
+CREATE INDEX idx_bookings_status ON bookings(status);
+CREATE TABLE ledger_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id INTEGER NOT NULL REFERENCES bookings(id), customer_name TEXT NOT NULL, product_code TEXT NOT NULL, product_title TEXT NOT NULL, unit_price INTEGER NOT NULL, pax INTEGER NOT NULL, total_amount INTEGER NOT NULL, duration_days INTEGER NOT NULL, vendor TEXT NOT NULL, airline TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip_address TEXT NOT NULL, route TEXT NOT NULL, request_time INTEGER NOT NULL);
+CREATE INDEX idx_rate ON rate_limits(ip_address, route, request_time);

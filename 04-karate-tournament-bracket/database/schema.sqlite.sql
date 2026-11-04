@@ -1,0 +1,5 @@
+-- Same schema for SQLite (used by the automated tests)
+CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE participants (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, sex TEXT NOT NULL CHECK (sex IN ('M','F')), birth_date TEXT NOT NULL, weight_kg REAL NOT NULL, belt TEXT NOT NULL, dojo TEXT NOT NULL, event TEXT NOT NULL CHECK (event IN ('kumite','kata')), created_at TEXT NOT NULL);
+CREATE TABLE brackets (id INTEGER PRIMARY KEY AUTOINCREMENT, category_key TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+CREATE TABLE matches (id INTEGER PRIMARY KEY AUTOINCREMENT, bracket_id INTEGER NOT NULL REFERENCES brackets(id) ON DELETE CASCADE, round INTEGER NOT NULL, position INTEGER NOT NULL, red_id INTEGER REFERENCES participants(id), white_id INTEGER REFERENCES participants(id), winner_id INTEGER REFERENCES participants(id), UNIQUE (bracket_id, round, position));

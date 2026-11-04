@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Travel Booking — API demo</title>
+<style>
+  :root { --navy:#0b2b50; --blue:#1d6fd8; --line:#dbe3ee; --bg:#f4f7fb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:#1f2937; }
+  header { background:var(--navy); color:#fff; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:1.15rem; margin:0; }
+  main { max-width:1100px; margin:24px auto; padding:0 16px; display:grid; gap:20px; grid-template-columns: 1fr 1fr; }
+  section { background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { font-size:1rem; margin:0 0 12px; color:var(--navy); }
+  label { display:block; font-size:.8rem; color:#4b5563; margin:8px 0 4px; }
+  input, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:.95rem; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button { margin-top:12px; padding:9px 16px; border:0; border-radius:8px; background:var(--blue); color:#fff; cursor:pointer; font-size:.9rem; }
+  button.secondary { background:#64748b; }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); }
+  th { color:#6b7280; font-weight:600; }
+  .msg { margin-top:10px; font-size:.88rem; }
+  .msg.error { color:#b91c1c; } .msg.ok { color:#047857; }
+  .badge { padding:2px 8px; border-radius:999px; font-size:.75rem; background:#e5e7eb; }
+  .badge.confirmed { background:#dbeafe; } .badge.paid { background:#d1fae5; } .badge.cancelled { background:#fee2e2; }
+  #login { max-width:360px; margin:60px auto; }
+  .hidden { display:none !important; }
+  @media (max-width: 800px) { main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header><h1>Travel Booking</h1><span id="who"></span></header>
+
+<section id="login">
+  <h2>Sign in</h2>
+  <form id="loginForm">
+    <label for="u">Username</label><input id="u" required autocomplete="username">
+    <label for="p">Password</label><input id="p" type="password" required autocomplete="current-password">
+    <button type="submit">Sign in</button>
+    <div class="msg" id="loginMsg"></div>
+  </form>
+</section>
+
+<main id="app" class="hidden">
+  <section>
+    <h2>Tour products</h2>
+    <table><thead><tr><th>Code</th><th>Tour</th><th>Days</th><th>Price / person</th></tr></thead><tbody id="products"></tbody></table>
+  </section>
+
+  <section>
+    <h2>New booking</h2>
+    <form id="bookingForm">
+      <label for="product_code">Product</label><select id="product_code" required></select>
+      <label for="customer_name">Customer name</label><input id="customer_name" required>
+      <div class="row">
+        <div><label for="phone">Phone</label><input id="phone" required placeholder="+62 812..."></div>
+        <div><label for="email">Email</label><input id="email" type="email" required></div>
+      </div>
+      <div class="row">
+        <div><label for="departure_date">Departure</label><input id="departure_date" type="date" required></div>
+        <div><label for="pax">Travellers</label><input id="pax" type="number" min="1" max="50" value="1" required></div>
+      </div>
+      <div class="row">
+        <div><label for="passport_number">Passport no.</label><input id="passport_number" required></div>
+        <div><label for="passport_expiry">Passport expiry</label><input id="passport_expiry" type="date" required></div>
+      </div>
+      <button type="submit">Create booking</button>
+      <div class="msg" id="bookingMsg"></div>
+    </form>
+  </section>
+
+  <section class="wide">
+    <h2>Bookings</h2>
+    <table><thead><tr><th>#</th><th>Customer</th><th>Product</th><th>Departure</th><th>Pax</th><th>Status</th><th></th></tr></thead><tbody id="bookings"></tbody></table>
+  </section>
+</main>
+
+<script>
+const API = 'api';
+let token = sessionStorage.getItem('token');
+const rupiah = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+const $ = id => document.getElementById(id);
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  const data = await res.json();
+  if (res.status === 401 && token) { logout(); }
+  if (!res.ok) {
+    const details = data.errors ? ' — ' + Object.entries(data.errors).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
+    throw new Error(data.message + details);
+  }
+  return data;
+}
+
+// Build table rows with textContent only, so API data can never inject HTML
+function row(cells) {
+  const tr = document.createElement('tr');
+  cells.forEach(c => { const td = document.createElement('td'); c instanceof Node ? td.append(c) : (td.textContent = c); tr.append(td); });
+  return tr;
+}
+
+async function loadProducts() {
+  const { data } = await api('/products');
+  $('products').replaceChildren(...data.map(p => row([p.code, p.title, p.duration_days, rupiah(p.price)])));
+  $('product_code').replaceChildren(...data.map(p => new Option(`${p.code} — ${p.title}`, p.code)));
+}
+
+async function loadBookings() {
+  const { data } = await api('/bookings?per_page=50');
+  $('bookings').replaceChildren(...data.map(b => {
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + b.status; badge.textContent = b.status;
+    const select = document.createElement('select');
+    ['pending', 'confirmed', 'paid', 'cancelled'].forEach(s => select.add(new Option(s, s, false, s === b.status)));
+    select.disabled = b.status === 'cancelled';
+    select.onchange = async () => {
+      try { await api(`/bookings/${b.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: select.value }) }); loadBookings(); }
+      catch (e) { alert(e.message); loadBookings(); }
+    };
+    return row([b.id, b.customer_name, b.product_code, b.departure_date, b.pax, badge, select]);
+  }));
+}
+
+function showApp(user) {
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('who').textContent = `${user.username} (${user.role}) `;
+  const out = document.createElement('button'); out.textContent = 'Sign out'; out.className = 'secondary'; out.style.margin = 0; out.onclick = logout;
+  $('who').append(out);
+  loadProducts().catch(e => alert(e.message));
+  loadBookings().catch(e => alert(e.message));
+}
+
+function logout() {
+  token = null; sessionStorage.clear();
+  $('app').classList.add('hidden'); $('login').classList.remove('hidden'); $('who').textContent = '';
+}
+
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username: $('u').value, password: $('p').value }) });
+    token = data.token;
+    sessionStorage.setItem('token', token);
+    sessionStorage.setItem('user', JSON.stringify(data.user));
+    showApp(data.user);
+  } catch (err) { $('loginMsg').className = 'msg error'; $('loginMsg').textContent = err.message; }
+};
+
+$('bookingForm').onsubmit = async e => {
+  e.preventDefault();
+  const fields = ['product_code', 'customer_name', 'phone', 'email', 'departure_date', 'pax', 'passport_number', 'passport_expiry'];
+  const body = Object.fromEntries(fields.map(f => [f, $(f).value]));
+  body.pax = Number(body.pax);
+  try {
+    const { data } = await api('/bookings', { method: 'POST', body: JSON.stringify(body) });
+    $('bookingMsg').className = 'msg ok';
+    $('bookingMsg').textContent = `Booking #${data.id} created — total ${rupiah(data.ledger[0].total_amount)}`;
+    e.target.reset();
+    loadBookings();
+  } catch (err) { $('bookingMsg').className = 'msg error'; $('bookingMsg').textContent = err.message; }
+};
+
+if (token) { showApp(JSON.parse(sessionStorage.getItem('user') || '{}')); }
+</script>
+</body>
+</html>
